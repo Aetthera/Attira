@@ -1,28 +1,26 @@
 //
-//  EditColectionView.swift
+//  CoreateCollectionView.swift
 //  Attira
 //
 //  Created by Alena Belova  on 2026-09-06.
 //
+
 import SwiftUI
 import SwiftData
 
-struct EditCollectionView: View {
+struct CreateCollectionView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     
-    let collection: ClothingCollection
-    
-    @State private var name: String
-    @State private var description: String
-    
-    init(collection: ClothingCollection) {
-        self.collection = collection
-        _name = State(initialValue: collection.name)
-        _description = State(initialValue: collection.collectionDescription)
-    }
+    @State private var name = ""
+    @State private var description = ""
     
     private var cleanedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private var cleanedDescription: String {
+        description.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     var body: some View {
@@ -39,7 +37,7 @@ struct EditCollectionView: View {
                     .lineLimit(3...6)
                 }
             }
-            .navigationTitle("Edit Collection")
+            .navigationTitle("New Collection")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -48,10 +46,13 @@ struct EditCollectionView: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        collection.name = cleanedName
-                        collection.collectionDescription =
-                            description.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Button("Create") {
+                        let collection = ClothingCollection(
+                            name: cleanedName,
+                            collectionDescription: cleanedDescription
+                        )
+                        
+                        modelContext.insert(collection)
                         dismiss()
                     }
                     .disabled(cleanedName.isEmpty)

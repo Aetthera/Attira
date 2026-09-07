@@ -27,6 +27,6 @@ struct AttiraApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(for: [Item.self, ClothingCollection.self])
     }
 }
