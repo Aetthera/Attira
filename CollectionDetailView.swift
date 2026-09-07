@@ -4,193 +4,153 @@
 //
 //  Created by Alena Belova  on 2026-09-06.
 //
-
 import SwiftUI
+import SwiftData
 
 struct CollectionDetailView: View {
-    let collection: Collection
-    let items: [Item]
-    let onEdit: () -> Void
-    let onDeleteItem: (Item) -> Void
-    let onAddItem: (Item) -> Void
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     
-    @State private var showingEdit = false
-    @State private var showingAddPicker = false
-    @State private var selectedItem: Item?
+    let collection: ClothingCollection
+    
+    @State private var showingEditCollection = false
+    @State private var showingAddItems = false
+    @State private var showingDeleteAlert = false
     
     var body: some View {
-        VStack {
-            List {
-                Section {
-                    HStack {
-                        Text(collection.name)
-                            .font(.headline)
-                        Spacer()
-                        Button("Edit") {
-                            showingEdit = true
-                        }
-                        .font(.subheadline)
-                    }
-                    if let desc = collection.description, !desc.isEmpty {
-                        Text(desc)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Section("Items") {
-                    ForEach(items) { item in
-                        Button {
-                            selectedItem = item
-                        } label: {
-                            HStack {
-                                if let url = item.imageUrl,
-                                   let uiImage = UIImage(contentsOfFile: url) {
-                                    Image(uiImage: uiImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 50, height: 50)
-                                        .cornerRadius(6)
-                                } else {
-                                    Rectangle()
-                                        .fill(Color.gray.opacity(0.2))
-                                        .frame(width: 50, height: 50)
-                                        .cornerRadius(6)
-                                }
-                                
-                                VStack(alignment: .leading) {
-                                    Text(item.name)
-                                        .font(.subheadline)
-                                    Text(item.category)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Button(role: .destructive) {
-                                    onDeleteItem(item)
-                                } label: {
-                                    Image(systemName: "trash")
-                                }
-                            }
-                        }
-                    }
+        List {
+            if !collection.collectionDescription.isEmpty {
+                Section("Description") {
+                    Text(collection.collectionDescription)
+                        .foregroundStyle(.secondary)
                 }
             }
             
+            Section {
+                if collection.items.isEmpty {
+                    ContentUnavailableView(
+                        "No Items Yet",
+                        systemImage: "tshirt",
+                        description: Text(
+                            "Use the Add Items button below to add clothing to this collection."
+                        )
+                    )
+                    .listRowBackground(Color.clear)
+                } else {
+                    ForEach(collection.items) { item in
+                        NavigationLink {
+                            ClothingDetailView(item: item)
+                        } label: {
+                            CollectionItemRow(item: item)
+                        }
+                    }
+                    .onDelete(perform: removeItems)
+                }
+            } header: {
+                Text("Items (\(collection.items.count))")
+            }
+        }
+        .navigationTitle(collection.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showingEditCollection = true
+                    } label: {
+                        Label("Edit Collection", systemImage: "pencil")
+                    }
+                    
+                    Button(role: .destructive) {
+                        showingDeleteAlert = true
+                    } label: {
+                        Label("Delete Collection", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
             Button {
-                showingAddPicker = true
+                showingAddItems = true
             } label: {
-                Label("Add item to collection", systemImage: "plus")
+                Label("Add Items", systemImage: "plus")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .padding()
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(.bar)
         }
-        .navigationTitle("Collection")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit") {
-                    showingEdit = true
-                }
-            }
-        }
-        .sheet(isPresented: $showingEdit) {
+        .sheet(isPresented: $showingEditCollection) {
             EditCollectionView(collection: collection)
         }
-        .sheet(isPresented: $showingAddPicker) {
-            AddItemToCollectionPicker(
-                items: items,
-                allItems: [], // you can pass full item list from parent if needed
-                collection: collection,
-                onAdd: onAddItem
+        .sheet(isPresented: $showingAddItems) {
+            AddItemsToCollectionView(collection: collection)
+        }
+        .alert("Delete Collection?", isPresented: $showingDeleteAlert) {
+            Button("Delete", role: .destructive) {
+                modelContext.delete(collection)
+                dismiss()
+            }
+            
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(
+                "This deletes the collection only. The clothing items remain in your wardrobe."
             )
         }
-        .fullScreenCover(item: $selectedItem) { item in
-            ItemNoteDetailView(item: item)
+    }
+    
+    private func removeItems(at offsets: IndexSet) {
+        for index in offsets {
+            let item = collection.items[index]
+            collection.items.removeAll { $0.persistentModelID == item.persistentModelID }
         }
     }
 }
 
-// Simple picker to choose an item to add to this collection
-struct AddItemToCollectionPicker: View {
-    let items: [Item]
-    let allItems: [Item]
-    let collection: Collection
-    let onAdd: (Item) -> Void
-    
-    @Environment(\.dismiss) var dismiss
+private struct CollectionItemRow: View {
+    let item: Item
     
     var body: some View {
-        NavigationView {
-            List(allItems.filter { !items.contains(where: { $0.id == $0.id }) }) { item in
-                Button {
-                    onAdd(item)
-                    dismiss()
-                } label: {
-                    HStack {
-                        Text(item.name)
-                        Spacer()
-                        Text(item.category)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .navigationTitle("Add item")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Full-screen item detail with note editing
-struct ItemNoteDetailView: View {
-    @State var item: Item
-    @EnvironmentObject var itemStore: ItemStore
-    @Environment(\.dismiss) var dismiss
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Item") {
-                    Text(item.name)
-                    Text(item.category)
-                }
+        HStack(spacing: 12) {
+            CollectionItemImage(item: item)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.name)
+                    .font(.headline)
                 
-                Section("Note") {
-                    TextEditor(text: $item.note)
-                        .frame(minHeight: 120)
-                }
+                Text(item.category)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .navigationTitle(item.name)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
-                        if let index = itemStore.items.firstIndex(where: { $0.id == item.id }) {
-                            itemStore.items[index] = item
-                        }
-                        dismiss()
-                    }
-                }
-            }
+            
+            Spacer()
         }
+        .padding(.vertical, 3)
     }
 }
 
-#Preview {
-    CollectionDetailView(
-        collection: Collection(name: "Work"),
-        items: [],
-        onEdit: {},
-        onDeleteItem: { _ in },
-        onAddItem: { _ in }
-    )
-    .environmentObject(ItemStore())
-    .environmentObject(CollectionStore())
+private struct CollectionItemImage: View {
+    let item: Item
+    
+    var body: some View {
+        if let imageID = item.imageID,
+           let image = ImageStore.shared.loadImage(id: imageID) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 58, height: 58)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else {
+            Image(systemName: "tshirt")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: 58, height: 58)
+                .background(Color.secondary.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
 }
